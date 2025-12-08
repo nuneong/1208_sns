@@ -11,6 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 자세한 내용: [Clerk 로컬라이제이션 가이드](./docs/clerk-localization.md)
 - **Database**: Supabase (PostgreSQL)
 - **Styling**: Tailwind CSS v4 (uses `globals.css`, no config file)
+  - Instagram 컬러 스키마 적용 (`--instagram-blue`, `--instagram-background` 등)
+  - Instagram 타이포그래피 설정 (`--text-xs`, `--text-sm`, `--text-base`, `--text-xl` 등)
 - **UI Components**: shadcn/ui (based on Radix UI)
 - **Icons**: lucide-react
 - **Forms**: react-hook-form + Zod
@@ -86,15 +88,20 @@ pnpm lint
 - `lib/`: 유틸리티 함수 및 클라이언트 설정
   - `lib/supabase/`: Supabase 클라이언트들 (환경별로 분리)
   - `lib/utils.ts`: 공통 유틸리티 (cn 함수 등)
+  - `lib/types.ts`: TypeScript 타입 정의 (User, Post, Like, Comment, Follow 등)
 - `hooks/`: 커스텀 React Hook들
 - `supabase/`: 데이터베이스 마이그레이션 및 설정
   - `supabase/migrations/`: SQL 마이그레이션 파일들
+    - `20250115000000_create_sns_schema.sql`: 데이터베이스 스키마 (users, posts, likes, comments, follows)
+    - `20250115000001_create_posts_storage.sql`: Storage 버킷 설정
   - `supabase/config.toml`: Supabase 프로젝트 설정
+- `docs/`: 프로젝트 문서
+  - `supabase-migration-guide.md`: 데이터베이스 마이그레이션 가이드
+  - `supabase-storage-guide.md`: Storage 버킷 설정 가이드
 
 **예정된 디렉토리** (아직 없지만 필요 시 생성):
 
 - `actions/`: Server Actions (API 대신 우선 사용)
-- `types/`: TypeScript 타입 정의
 - `constants/`: 상수 값들
 - `states/`: 전역 상태 (jotai 사용, 최소화)
 
@@ -132,12 +139,70 @@ supabase/migrations/20241030014800_create_users_table.sql
   - `id`: UUID (Primary Key)
   - `clerk_id`: TEXT (Unique, Clerk User ID)
   - `name`: TEXT
-  - `created_at`: TIMESTAMP
+  - `created_at`: TIMESTAMPTZ
   - RLS: 개발 중 비활성화 (프로덕션에서는 활성화 필요)
+
+- `posts`: 게시물 테이블
+  - `id`: UUID (Primary Key)
+  - `user_id`: UUID (Foreign Key → users.id)
+  - `image_url`: TEXT (Supabase Storage URL)
+  - `caption`: TEXT (최대 2,200자)
+  - `created_at`, `updated_at`: TIMESTAMPTZ
+  - 인덱스: `idx_posts_user_id`, `idx_posts_created_at`
+  - RLS: 개발 중 비활성화
+
+- `likes`: 좋아요 테이블
+  - `id`: UUID (Primary Key)
+  - `post_id`: UUID (Foreign Key → posts.id)
+  - `user_id`: UUID (Foreign Key → users.id)
+  - `created_at`: TIMESTAMPTZ
+  - UNIQUE(post_id, user_id): 중복 좋아요 방지
+  - 인덱스: `idx_likes_post_id`, `idx_likes_user_id`
+  - RLS: 개발 중 비활성화
+
+- `comments`: 댓글 테이블
+  - `id`: UUID (Primary Key)
+  - `post_id`: UUID (Foreign Key → posts.id)
+  - `user_id`: UUID (Foreign Key → users.id)
+  - `content`: TEXT
+  - `created_at`, `updated_at`: TIMESTAMPTZ
+  - 인덱스: `idx_comments_post_id`, `idx_comments_user_id`, `idx_comments_created_at`
+  - RLS: 개발 중 비활성화
+
+- `follows`: 팔로우 관계 테이블
+  - `id`: UUID (Primary Key)
+  - `follower_id`: UUID (Foreign Key → users.id, 팔로우하는 사람)
+  - `following_id`: UUID (Foreign Key → users.id, 팔로우받는 사람)
+  - `created_at`: TIMESTAMPTZ
+  - UNIQUE(follower_id, following_id): 중복 팔로우 방지
+  - CHECK (follower_id != following_id): 자기 자신 팔로우 방지
+  - 인덱스: `idx_follows_follower_id`, `idx_follows_following_id`
+  - RLS: 개발 중 비활성화
+
+#### 데이터베이스 Views
+
+- `post_stats`: 게시물 통계 뷰 (좋아요 수, 댓글 수)
+- `user_stats`: 사용자 통계 뷰 (게시물 수, 팔로워 수, 팔로잉 수)
+
+#### 데이터베이스 Triggers
+
+- `set_updated_at` on `posts`: posts 테이블 업데이트 시 updated_at 자동 갱신
+- `set_updated_at` on `comments`: comments 테이블 업데이트 시 updated_at 자동 갱신
 
 #### Storage 버킷
 
-- `uploads`: 사용자 파일 저장소
+- `posts`: 게시물 이미지 저장소
+  - 공개 읽기: 모든 사용자가 이미지 조회 가능
+  - 파일 크기 제한: 5MB
+  - 허용 파일 타입: image/jpeg, image/png, image/webp
+  - 경로 구조: `posts/{userId}/{timestamp}-{filename}`
+  - 정책:
+    - INSERT: 인증된 사용자만 업로드 가능
+    - SELECT: 모든 사용자가 읽기 가능 (공개 버킷)
+    - DELETE: 인증된 사용자만 자신의 파일 삭제 가능
+    - UPDATE: 인증된 사용자만 자신의 파일 업데이트 가능
+
+- `uploads`: 사용자 파일 저장소 (기존)
   - 경로 구조: `{clerk_user_id}/{filename}`
   - RLS 정책:
     - INSERT: 인증된 사용자만 자신의 폴더에 업로드 가능

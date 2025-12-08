@@ -179,14 +179,32 @@ npm install -g pnpm
 
 #### 5. 데이터베이스 스키마 적용
 
+Instagram 클론 SNS 프로젝트의 데이터베이스 스키마를 적용합니다:
+
 1. Supabase Dashboard → **SQL Editor** 메뉴
 2. **"New query"** 클릭
-3. `supabase/migrations/schema.sql` 파일 내용을 복사하여 붙여넣기
-4. **"Run"** 클릭하여 실행
-5. 성공 메시지 확인 (`Success. No rows returned`)
+3. 다음 마이그레이션 파일들을 순서대로 실행:
+   - `supabase/migrations/20250115000000_create_sns_schema.sql` - 데이터베이스 스키마
+   - `supabase/migrations/20250115000001_create_posts_storage.sql` - Storage 버킷
+4. 각 파일의 내용을 복사하여 붙여넣기
+5. **"Run"** 클릭하여 실행
+6. 성공 메시지 확인
 
 **생성되는 테이블:**
 - `users`: Clerk 사용자와 동기화되는 사용자 정보 테이블
+- `posts`: 게시물 테이블
+- `likes`: 좋아요 테이블
+- `comments`: 댓글 테이블
+- `follows`: 팔로우 관계 테이블
+
+**생성되는 뷰:**
+- `post_stats`: 게시물 통계 (좋아요 수, 댓글 수)
+- `user_stats`: 사용자 통계 (게시물 수, 팔로워 수, 팔로잉 수)
+
+**생성되는 Storage 버킷:**
+- `posts`: 게시물 이미지 저장소 (공개 읽기, 5MB 제한)
+
+자세한 내용은 [Supabase 마이그레이션 가이드](./docs/supabase-migration-guide.md)와 [Storage 가이드](./docs/supabase-storage-guide.md)를 참고하세요.
 
 #### 6. 환경 변수 설정
 
