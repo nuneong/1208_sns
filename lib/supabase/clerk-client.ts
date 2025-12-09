@@ -35,7 +35,7 @@ import { useMemo } from "react";
  *     fetchData();
  *   }, [supabase]);
  *
- *   return <div>{/* ... */}</div>;
+ *   return <div>...</div>;
  * }
  * ```
  */

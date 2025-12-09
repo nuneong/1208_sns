@@ -51,14 +51,32 @@ export default function StorageTestPage() {
           sortBy: { column: "created_at", order: "desc" },
         });
 
-      if (error) throw error;
+      if (error) {
+        // 버킷이 없는 경우 특별한 메시지 표시
+        if (error.message?.includes("Bucket not found") || error.message?.includes("not found")) {
+          throw new Error(
+            `Storage 버킷 "${STORAGE_BUCKET}"이(가) 생성되지 않았습니다. Supabase Dashboard에서 버킷을 생성해주세요.`
+          );
+        }
+        // RLS 정책 위반 에러 처리
+        if (
+          error.message?.includes("row-level security") ||
+          error.message?.includes("RLS") ||
+          error.message?.includes("policy")
+        ) {
+          throw new Error(
+            `Storage RLS 정책 위반: Supabase Dashboard에서 Storage 정책을 확인하거나, 개발 단계에서는 정책을 완화해주세요. 마이그레이션 파일: supabase/migrations/20250115000002_fix_uploads_storage_policy.sql`
+          );
+        }
+        throw error;
+      }
       setFiles(data || []);
     } catch (err) {
-      setError(
+      const errorMessage =
         err instanceof Error
           ? err.message
-          : "파일 목록을 가져오는데 실패했습니다.",
-      );
+          : "파일 목록을 가져오는데 실패했습니다.";
+      setError(errorMessage);
       console.error("Error fetching files:", err);
     } finally {
       setLoading(false);
@@ -100,7 +118,28 @@ export default function StorageTestPage() {
           upsert: false,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        // 버킷이 없는 경우 특별한 메시지 표시
+        if (
+          uploadError.message?.includes("Bucket not found") ||
+          uploadError.message?.includes("not found")
+        ) {
+          throw new Error(
+            `Storage 버킷 "${STORAGE_BUCKET}"이(가) 생성되지 않았습니다. Supabase Dashboard에서 버킷을 생성해주세요.`
+          );
+        }
+        // RLS 정책 위반 에러 처리
+        if (
+          uploadError.message?.includes("row-level security") ||
+          uploadError.message?.includes("RLS") ||
+          uploadError.message?.includes("policy")
+        ) {
+          throw new Error(
+            `Storage RLS 정책 위반: Supabase Dashboard에서 Storage 정책을 확인하거나, 개발 단계에서는 정책을 완화해주세요. 마이그레이션 파일: supabase/migrations/20250115000002_fix_uploads_storage_policy.sql`
+          );
+        }
+        throw uploadError;
+      }
 
       // 파일 목록 새로고침
       await fetchFiles();
@@ -127,7 +166,18 @@ export default function StorageTestPage() {
         .from("uploads")
         .download(filePath);
 
-      if (error) throw error;
+      if (error) {
+        // 버킷이 없는 경우 특별한 메시지 표시
+        if (
+          error.message?.includes("Bucket not found") ||
+          error.message?.includes("not found")
+        ) {
+          throw new Error(
+            `Storage 버킷 "uploads"이(가) 생성되지 않았습니다. Supabase Dashboard에서 버킷을 생성해주세요.`
+          );
+        }
+        throw error;
+      }
 
       // Blob을 다운로드 링크로 변환
       const url = URL.createObjectURL(data);
@@ -157,7 +207,18 @@ export default function StorageTestPage() {
         .from("uploads")
         .remove([filePath]);
 
-      if (error) throw error;
+      if (error) {
+        // 버킷이 없는 경우 특별한 메시지 표시
+        if (
+          error.message?.includes("Bucket not found") ||
+          error.message?.includes("not found")
+        ) {
+          throw new Error(
+            `Storage 버킷 "uploads"이(가) 생성되지 않았습니다. Supabase Dashboard에서 버킷을 생성해주세요.`
+          );
+        }
+        throw error;
+      }
 
       // 파일 목록 새로고침
       await fetchFiles();
@@ -223,6 +284,47 @@ export default function StorageTestPage() {
           <div className="flex-1">
             <h3 className="font-semibold text-red-800">에러</h3>
             <p className="text-sm text-red-700">{error}</p>
+            {(error.includes("버킷") || error.includes("RLS") || error.includes("policy")) && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-sm font-semibold text-blue-800 mb-2">
+                  해결 방법:
+                </p>
+                {error.includes("버킷") ? (
+                  <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+                    <li>
+                      Supabase Dashboard → <strong>Storage</strong> →{" "}
+                      <strong>Buckets</strong>로 이동
+                    </li>
+                    <li>
+                      <strong>New bucket</strong> 클릭하여 버킷 생성
+                    </li>
+                    <li>
+                      또는 SQL Editor에서{" "}
+                      <code className="bg-blue-100 px-1 rounded">
+                        supabase/migrations/setup_storage.sql
+                      </code>{" "}
+                      파일 실행
+                    </li>
+                  </ol>
+                ) : (
+                  <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+                    <li>
+                      Supabase Dashboard → <strong>SQL Editor</strong>로 이동
+                    </li>
+                    <li>
+                      <code className="bg-blue-100 px-1 rounded">
+                        supabase/migrations/20250115000002_fix_uploads_storage_policy.sql
+                      </code>{" "}
+                      파일 내용 실행
+                    </li>
+                    <li>
+                      또는 <strong>Storage</strong> → <strong>Policies</strong>에서
+                      정책 확인 및 수정
+                    </li>
+                  </ol>
+                )}
+              </div>
+            )}
           </div>
           <Button
             variant="ghost"

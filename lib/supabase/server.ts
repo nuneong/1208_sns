@@ -25,7 +25,7 @@ import { auth } from "@clerk/nextjs/server";
  *   
  *   if (error) throw error;
  *   
- *   return <div>{/* ... */}</div>;
+ *   return <div>...</div>;
  * }
  * ```
  *
